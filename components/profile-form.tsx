@@ -1,0 +1,622 @@
+"use client";
+
+import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { defaultProfile, emptyIntakeProfile } from "@/lib/mock-data";
+import { saveProfile } from "@/lib/storage";
+import type { FuturePlan, PreferencePriority, UserProfile } from "@/lib/types";
+
+const rankRangeOptions = [
+  { label: "1–1000", value: "1-1000", rank: 500 },
+  { label: "1000–2000", value: "1000-2000", rank: 1500 },
+  { label: "2000–3000", value: "2000-3000", rank: 2500 },
+  { label: "3000–5000", value: "3000-5000", rank: 4000 },
+  { label: "5000–8000", value: "5000-8000", rank: 6500 },
+  { label: "8000–12000", value: "8000-12000", rank: 10000 },
+  { label: "12000–18000", value: "12000-18000", rank: 15000 },
+  { label: "18000–25000", value: "18000-25000", rank: 21500 },
+  { label: "25000–35000", value: "25000-35000", rank: 30000 },
+  { label: "35000–50000", value: "35000-50000", rank: 42500 },
+  { label: "50000+", value: "50000+", rank: 55000 }
+] as const;
+
+const subjectOptions = [
+  "物理+化学+生物",
+  "物理+化学+地理",
+  "物理+生物+政治",
+  "物理+化学+政治",
+  "历史+政治+地理",
+  "历史+政治+生物",
+  "其他组合"
+] as const;
+
+const regionPreferenceOptions = [
+  "本省优先（安徽）",
+  "长三角优先（江苏/浙江/上海）",
+  "华东地区（含山东）",
+  "华中地区（湖北/湖南）",
+  "华南地区（广东/福建）",
+  "全国均可"
+] as const;
+
+const majorQuickTags = [
+  "医学类",
+  "师范类",
+  "法学类",
+  "农林类",
+  "艺术类",
+  "军警类",
+  "计算机类",
+  "经管类"
+] as const;
+
+/** 可接受学费区间（元/年），选中后映射为 tuitionMax 中位数/上限供推荐逻辑使用 */
+const tuitionTierOptions = [
+  { label: "5000 元/年以下", value: "0-5000", tuitionMax: 5000 },
+  { label: "5000–8000 元/年", value: "5000-8000", tuitionMax: 6500 },
+  { label: "8000–12000 元/年", value: "8000-12000", tuitionMax: 10000 },
+  { label: "12000–20000 元/年", value: "12000-20000", tuitionMax: 16000 },
+  { label: "20000 元/年以上", value: "20000+", tuitionMax: 30000 },
+  { label: "其他（自填）", value: "other", tuitionMax: null }
+] as const;
+
+/** 根据已保存的 tuitionMax 反推下拉选中项；无法落入预设区间时视为「其他」 */
+function tuitionTierFromAmount(amount: number): string {
+  if (amount <= 0) return "0-5000";
+  if (amount <= 5000) return "0-5000";
+  if (amount <= 8000) return "5000-8000";
+  if (amount <= 12000) return "8000-12000";
+  if (amount <= 20000) return "12000-20000";
+  if (amount <= 50000) return "20000+";
+  return "other";
+}
+
+export function ProfileForm() {
+  const router = useRouter();
+  const [form, setForm] = useState<UserProfile>(emptyIntakeProfile);
+  /** 分数用字符串展示，避免 number 输入前导 0、步进器问题 */
+  const [scoreInput, setScoreInput] = useState("");
+  const [tuitionTier, setTuitionTier] = useState("");
+  const [customTuitionInput, setCustomTuitionInput] = useState("");
+  const [selectedRankRange, setSelectedRankRange] = useState("");
+  const [selectedSubjectOption, setSelectedSubjectOption] = useState("");
+  const [customSubject, setCustomSubject] = useState("");
+  const [selectedRegionPreference, setSelectedRegionPreference] = useState("");
+  const [prefPriority, setPrefPriority] = useState<PreferencePriority | undefined>(undefined);
+  const [prefFuture, setPrefFuture] = useState<FuturePlan | undefined>(undefined);
+  const [excludeCity, setExcludeCity] = useState("");
+  const [excludeProvince, setExcludeProvince] = useState("");
+  const [excludeMajor, setExcludeMajor] = useState("");
+
+  const submit = () => {
+    if (!scoreInput.trim() || form.score <= 0) {
+      toast.error("请填写高考分数");
+      return;
+    }
+    if (!selectedRankRange) {
+      toast.error("请选择全省位次区间");
+      return;
+    }
+    if (!selectedSubjectOption) {
+      toast.error("请选择科类 / 选科组合");
+      return;
+    }
+    if (selectedSubjectOption === "其他组合" && !customSubject.trim()) {
+      toast.error("请填写你的选科组合");
+      return;
+    }
+    if (!tuitionTier) {
+      toast.error("请选择可接受学费区间");
+      return;
+    }
+    if (tuitionTier === "other" && !customTuitionInput.trim()) {
+      toast.error("请填写可接受最高学费（元/年）");
+      return;
+    }
+    if (!selectedRegionPreference) {
+      toast.error("请选择更倾向的地区");
+      return;
+    }
+    if (prefPriority === undefined) {
+      toast.error("请选择排序偏好");
+      return;
+    }
+    if (prefFuture === undefined) {
+      toast.error("请选择毕业方向侧重");
+      return;
+    }
+
+    const profile: UserProfile = {
+      ...form,
+      priorityMode: prefPriority,
+      futurePlan: prefFuture
+    };
+    saveProfile(profile);
+    toast.success("画像已保存", { description: "正在进入推荐结果页" });
+    router.push("/results");
+  };
+
+  return (
+    <div className="mx-auto max-w-5xl space-y-6 p-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-xl">安徽考生信息采集</CardTitle>
+          <CardDescription>默认籍贯宿州萧县；分步填写基础信息、硬约束与偏好，数据仅存于本机浏览器。</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Tabs defaultValue="basic" className="w-full">
+            <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-flex">
+              <TabsTrigger value="basic">基础与分数</TabsTrigger>
+              <TabsTrigger value="hard">硬约束排除</TabsTrigger>
+              <TabsTrigger value="pref">偏好与路径</TabsTrigger>
+            </TabsList>
+
+            <TabsContent value="basic" className="space-y-4 pt-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="score">高考分数</Label>
+                  <Input
+                    id="score"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="请输入分数"
+                    className="no-spinner"
+                    value={scoreInput}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "");
+                      setScoreInput(digits);
+                      if (digits === "") {
+                        setForm((f) => ({ ...f, score: 0 }));
+                        return;
+                      }
+                      const n = parseInt(digits, 10);
+                      setForm((f) => ({ ...f, score: Number.isNaN(n) ? 0 : n }));
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">仅填数字，不会出现前侧多余 0</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="rank-range">全省位次（区间）</Label>
+                  <Select
+                    value={selectedRankRange || undefined}
+                    onValueChange={(value) => {
+                      setSelectedRankRange(value);
+                      const found = rankRangeOptions.find((item) => item.value === value);
+                      if (found) setForm((f) => ({ ...f, rank: found.rank }));
+                    }}
+                  >
+                    <SelectTrigger id="rank-range">
+                      <SelectValue placeholder="选择位次区间" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {rankRangeOptions.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">用于评估录取风险，区间越合理推荐越稳定</p>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="subject">科类 / 选科组合</Label>
+                  <Select
+                    value={selectedSubjectOption || undefined}
+                    onValueChange={(value) => {
+                      setSelectedSubjectOption(value);
+                      setForm((f) => ({
+                        ...f,
+                        subjectType: value === "其他组合" ? customSubject || "其他组合" : value
+                      }));
+                    }}
+                  >
+                    <SelectTrigger id="subject">
+                      <SelectValue placeholder="请选择选科组合" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {subjectOptions.map((item) => (
+                        <SelectItem key={item} value={item}>
+                          {item}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {selectedSubjectOption === "其他组合" && (
+                    <Input
+                      value={customSubject}
+                      placeholder="请输入你的选科组合"
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setCustomSubject(value);
+                        setForm((f) => ({ ...f, subjectType: value || "其他组合" }));
+                      }}
+                    />
+                  )}
+                  <p className="text-xs text-muted-foreground">用于筛选可报考专业范围</p>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="tuition-tier">可接受学费（元/年）</Label>
+                  <Select
+                    value={tuitionTier || undefined}
+                    onValueChange={(value) => {
+                      setTuitionTier(value);
+                      if (value === "other") {
+                        setCustomTuitionInput((prev) =>
+                          prev || (form.tuitionMax > 0 ? String(form.tuitionMax) : "")
+                        );
+                        return;
+                      }
+                      const opt = tuitionTierOptions.find((o) => o.value === value);
+                      if (opt && opt.tuitionMax !== null) {
+                        setCustomTuitionInput("");
+                        setForm((f) => ({ ...f, tuitionMax: opt.tuitionMax as number }));
+                      }
+                    }}
+                  >
+                    <SelectTrigger id="tuition-tier">
+                      <SelectValue placeholder="选择学费区间" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {tuitionTierOptions.map((item) => (
+                        <SelectItem key={item.value} value={item.value}>
+                          {item.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {tuitionTier === "other" && (
+                    <Input
+                      id="tuition-custom"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      className="no-spinner"
+                      placeholder="请输入可接受最高学费（元/年）"
+                      value={customTuitionInput}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, "");
+                        setCustomTuitionInput(digits);
+                        if (digits === "") {
+                          setForm((f) => ({ ...f, tuitionMax: 0 }));
+                          return;
+                        }
+                        const n = parseInt(digits, 10);
+                        setForm((f) => ({ ...f, tuitionMax: Number.isNaN(n) ? 0 : n }));
+                      }}
+                    />
+                  )}
+                  <p className="text-xs text-muted-foreground">按区间估算成本；选「其他」可精确填写</p>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="region-preference">更倾向的地区</Label>
+                  <Select
+                    value={selectedRegionPreference || undefined}
+                    onValueChange={(value) => {
+                      setSelectedRegionPreference(value);
+                      setForm((f) => ({
+                        ...f,
+                        preferredRegions: [value],
+                        maxDistanceTier: "nationwide"
+                      }));
+                    }}
+                  >
+                    <SelectTrigger id="region-preference">
+                      <SelectValue placeholder="选择更倾向的地区" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {regionPreferenceOptions.map((item) => (
+                        <SelectItem key={item} value={item}>
+                          {item}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">影响推荐城市偏好与排序权重</p>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="hard" className="space-y-4 pt-4">
+              <div className="rounded-lg border p-4">
+                <p className="mb-3 text-sm font-medium">明确不考虑的城市 / 省份 / 专业</p>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <div className="flex flex-1 gap-2">
+                    <Input
+                      placeholder="排除城市，如：广州"
+                      value={excludeCity}
+                      onChange={(e) => setExcludeCity(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        if (!excludeCity.trim()) return;
+                        setForm({
+                          ...form,
+                          excludedCities: Array.from(new Set([...form.excludedCities, excludeCity.trim()]))
+                        });
+                        setExcludeCity("");
+                      }}
+                    >
+                      添加城市
+                    </Button>
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-col gap-3 sm:flex-row">
+                  <div className="flex flex-1 gap-2">
+                    <Input
+                      placeholder="排除省份，如：黑龙江"
+                      value={excludeProvince}
+                      onChange={(e) => setExcludeProvince(e.target.value)}
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => {
+                        if (!excludeProvince.trim()) return;
+                        setForm({
+                          ...form,
+                          excludedProvinces: Array.from(new Set([...form.excludedProvinces, excludeProvince.trim()]))
+                        });
+                        setExcludeProvince("");
+                      }}
+                    >
+                      添加省份
+                    </Button>
+                  </div>
+                </div>
+                <p className="mt-3 text-xs text-muted-foreground">
+                  城市：{form.excludedCities.join("、") || "无"}；省份：
+                  {form.excludedProvinces.join("、") || "无"}；专业：{form.excludedMajors.join("、") || "无"}
+                </p>
+              </div>
+              <div className="rounded-lg border p-4">
+                <p className="mb-2 text-sm font-medium">专业排除快速标签（硬约束）</p>
+                <div className="grid gap-3 sm:grid-cols-2">
+                  {majorQuickTags.map((tag) => {
+                    const checked = form.excludedMajors.includes(tag);
+                    return (
+                      <div key={tag} className="flex items-center gap-2">
+                        <Checkbox
+                          id={`major-tag-${tag}`}
+                          checked={checked}
+                          onCheckedChange={(value) => {
+                            if (value === true) {
+                              setForm({
+                                ...form,
+                                excludedMajors: Array.from(new Set([...form.excludedMajors, tag]))
+                              });
+                            } else {
+                              setForm({
+                                ...form,
+                                excludedMajors: form.excludedMajors.filter((item) => item !== tag)
+                              });
+                            }
+                          }}
+                        />
+                        <Label htmlFor={`major-tag-${tag}`} className="font-normal">
+                          {tag}
+                        </Label>
+                      </div>
+                    );
+                  })}
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">先勾选大类，再在下方补充具体专业</p>
+              </div>
+              <div className="rounded-lg border p-4">
+                <p className="mb-2 text-sm font-medium">专业排除补充输入</p>
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <Input
+                    placeholder="补充不考虑专业，例如：口腔医学"
+                    value={excludeMajor}
+                    onChange={(e) => setExcludeMajor(e.target.value)}
+                  />
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    onClick={() => {
+                      if (!excludeMajor.trim()) return;
+                      setForm({
+                        ...form,
+                        excludedMajors: Array.from(new Set([...form.excludedMajors, excludeMajor.trim()]))
+                      });
+                      setExcludeMajor("");
+                    }}
+                  >
+                    添加专业
+                  </Button>
+                </div>
+              </div>
+              <Separator />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="private"
+                    checked={form.acceptPrivate}
+                    onCheckedChange={(v) => setForm({ ...form, acceptPrivate: v === true })}
+                  />
+                  <Label htmlFor="private" className="font-normal">
+                    接受民办院校
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="sino"
+                    checked={form.acceptSinoForeign}
+                    onCheckedChange={(v) => setForm({ ...form, acceptSinoForeign: v === true })}
+                  />
+                  <Label htmlFor="sino" className="font-normal">
+                    接受中外合作 / 高学费项目
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="adj"
+                    checked={form.acceptAdjustment}
+                    onCheckedChange={(v) => setForm({ ...form, acceptAdjustment: v === true })}
+                  />
+                  <Label htmlFor="adj" className="font-normal">
+                    接受专业调剂
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="cold"
+                    checked={form.acceptUnpopularMajor}
+                    onCheckedChange={(v) => setForm({ ...form, acceptUnpopularMajor: v === true })}
+                  />
+                  <Label htmlFor="cold" className="font-normal">
+                    接受相对冷门专业
+                  </Label>
+                </div>
+              </div>
+            </TabsContent>
+
+            <TabsContent value="pref" className="space-y-4 pt-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="priority">排序偏好</Label>
+                  <Select
+                    value={prefPriority}
+                    onValueChange={(value) => setPrefPriority(value as PreferencePriority)}
+                  >
+                    <SelectTrigger id="priority">
+                      <SelectValue placeholder="选择排序偏好" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="major">专业优先</SelectItem>
+                      <SelectItem value="school">学校优先</SelectItem>
+                      <SelectItem value="city">城市优先</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">影响系统推荐排序方式</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="future">毕业方向侧重</Label>
+                  <Select
+                    value={prefFuture}
+                    onValueChange={(value) => setPrefFuture(value as FuturePlan)}
+                  >
+                    <SelectTrigger id="future">
+                      <SelectValue placeholder="选择毕业方向" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="job">就业</SelectItem>
+                      <SelectItem value="postgraduate">考研</SelectItem>
+                      <SelectItem value="civil_service">考公</SelectItem>
+                      <SelectItem value="abroad">出国</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-xs text-muted-foreground">影响推荐专业方向</p>
+                </div>
+                <div className="space-y-2 md:col-span-2">
+                  <Label htmlFor="industries">意向行业（逗号分隔）</Label>
+                  <Input
+                    id="industries"
+                    value={form.targetIndustries.join(",")}
+                    onChange={(e) =>
+                      setForm({
+                        ...form,
+                        targetIndustries: e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
+                      })
+                    }
+                  />
+                  <p className="text-xs text-muted-foreground">用于匹配专业方向与就业路径</p>
+                </div>
+              </div>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="near"
+                    checked={form.preferNearHome}
+                    onCheckedChange={(v) => setForm({ ...form, preferNearHome: v === true })}
+                  />
+                  <Label htmlFor="near" className="font-normal">
+                    倾向离家近 / 高铁可达
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="leave"
+                    checked={form.willingLeaveAnhui}
+                    onCheckedChange={(v) => setForm({ ...form, willingLeaveAnhui: v === true })}
+                  />
+                  <Label htmlFor="leave" className="font-normal">
+                    愿意出省就读
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="campus"
+                    checked={form.valueCampus}
+                    onCheckedChange={(v) => setForm({ ...form, valueCampus: v === true })}
+                  />
+                  <Label htmlFor="campus" className="font-normal">
+                    看重校园环境
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Checkbox
+                    id="citydev"
+                    checked={form.valueCityDevelopment}
+                    onCheckedChange={(v) => setForm({ ...form, valueCityDevelopment: v === true })}
+                  />
+                  <Label htmlFor="citydev" className="font-normal">
+                    看重城市发展
+                  </Label>
+                </div>
+                <div className="flex items-center gap-2 sm:col-span-2">
+                  <Checkbox
+                    id="localjob"
+                    checked={form.planWorkLocallyAfterGrad}
+                    onCheckedChange={(v) => setForm({ ...form, planWorkLocallyAfterGrad: v === true })}
+                  />
+                  <Label htmlFor="localjob" className="font-normal">
+                    希望本科毕业后留在读书城市工作
+                  </Label>
+                </div>
+              </div>
+            </TabsContent>
+          </Tabs>
+        </CardContent>
+      </Card>
+      <div className="flex justify-end gap-2">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={() => {
+            setForm(defaultProfile);
+            setScoreInput(defaultProfile.score > 0 ? String(defaultProfile.score) : "");
+            setTuitionTier(tuitionTierFromAmount(defaultProfile.tuitionMax));
+            setCustomTuitionInput(
+              tuitionTierFromAmount(defaultProfile.tuitionMax) === "other"
+                ? String(defaultProfile.tuitionMax)
+                : ""
+            );
+            setSelectedRankRange("18000-25000");
+            setSelectedSubjectOption("物理+化学+地理");
+            setCustomSubject("");
+            setSelectedRegionPreference("长三角优先（江苏/浙江/上海）");
+            setPrefPriority(defaultProfile.priorityMode);
+            setPrefFuture(defaultProfile.futurePlan);
+          }}
+        >
+          恢复默认示例
+        </Button>
+        <Button type="button" onClick={submit}>
+          生成智能推荐
+        </Button>
+      </div>
+    </div>
+  );
+}
