@@ -10,7 +10,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { defaultProfile, emptyIntakeProfile } from "@/lib/mock-data";
 import { saveProfile } from "@/lib/storage";
 import type { FuturePlan, PreferencePriority, SchoolTierPreference, UserProfile } from "@/lib/types";
@@ -89,12 +88,21 @@ function tuitionTierFromAmount(amount: number): string {
   return "other";
 }
 
+type ScoreMode = "" | "official" | "mock" | "combined";
+type GradeMode = "" | "high1" | "high2" | "high3";
+
 export function ProfileForm() {
   const router = useRouter();
   const [form, setForm] = useState<UserProfile>(emptyIntakeProfile);
-  /** 分数用字符串展示，避免 number 输入前导 0、步进器问题 */
+  const [currentStep, setCurrentStep] = useState<1 | 2 | 3>(1);
+  const [scoreMode, setScoreMode] = useState<ScoreMode>("");
   const [scoreInput, setScoreInput] = useState("");
   const [mockScoreInput, setMockScoreInput] = useState("");
+  const [combinedMock1, setCombinedMock1] = useState("");
+  const [combinedMock2, setCombinedMock2] = useState("");
+  const [combinedMock3, setCombinedMock3] = useState("");
+  const [gradeMode, setGradeMode] = useState<GradeMode>("");
+  const [mockExamType, setMockExamType] = useState("");
   const [tuitionTier, setTuitionTier] = useState("");
   const [customTuitionInput, setCustomTuitionInput] = useState("");
   const [selectedRankRange, setSelectedRankRange] = useState("");
@@ -108,45 +116,103 @@ export function ProfileForm() {
   const [excludeProvince, setExcludeProvince] = useState("");
   const [excludeMajor, setExcludeMajor] = useState("");
 
-  const submit = () => {
-    if (!scoreInput.trim() && !mockScoreInput.trim()) {
-      toast.error("请填写高考分数或模考分数");
-      return;
+  const validateStepOne = () => {
+    if (!scoreMode) {
+      toast.error("请先选择分数填写场景");
+      return false;
+    }
+    if (scoreMode === "official" && (!scoreInput.trim() || form.score <= 0)) {
+      toast.error("请填写高考分数（正式分）");
+      return false;
+    }
+    if (scoreMode === "mock") {
+      if (!gradeMode) {
+        toast.error("请先选择当前年级");
+        return false;
+      }
+      if (!mockExamType) {
+        toast.error("请先选择模考类型");
+        return false;
+      }
+      if (!mockScoreInput.trim() || form.mockScore <= 0) {
+        toast.error("请填写模考分数");
+        return false;
+      }
+    }
+    if (scoreMode === "combined") {
+      const officialScore = scoreInput.trim() ? Number(scoreInput) : 0;
+      const mockScores = [combinedMock1, combinedMock2, combinedMock3]
+        .map((v) => (v.trim() ? Number(v) : 0))
+        .filter((v) => v > 0);
+      if (officialScore <= 0 && mockScores.length === 0) {
+        toast.error("综合参考至少填写一个成绩（正式分或任一模考分）");
+        return false;
+      }
     }
     if (!selectedRankRange) {
       toast.error("请选择全省位次区间");
-      return;
+      return false;
     }
     if (!selectedSubjectOption) {
       toast.error("请选择科类 / 选科组合");
-      return;
+      return false;
     }
     if (selectedSubjectOption === "其他组合" && !customSubject.trim()) {
       toast.error("请填写你的选科组合");
-      return;
+      return false;
     }
     if (!tuitionTier) {
       toast.error("请选择可接受学费区间");
-      return;
+      return false;
     }
     if (tuitionTier === "other" && !customTuitionInput.trim()) {
       toast.error("请填写可接受最高学费（元/年）");
-      return;
+      return false;
     }
     if (!selectedRegionPreference) {
       toast.error("请选择更倾向的地区");
-      return;
+      return false;
     }
+    return true;
+  };
+
+  const validateStepThree = () => {
     if (prefPriority === undefined) {
       toast.error("请选择排序偏好");
-      return;
+      return false;
     }
     if (prefFuture === undefined) {
       toast.error("请选择毕业方向侧重");
-      return;
+      return false;
     }
+    return true;
+  };
 
-    const finalScore = scoreInput.trim() ? form.score : form.mockScore;
+  const goNextStep = () => {
+    if (currentStep === 1 && !validateStepOne()) return;
+    if (currentStep < 3) setCurrentStep((s) => (s + 1) as 2 | 3);
+  };
+
+  const submit = () => {
+    if (!validateStepOne()) return;
+    if (!validateStepThree()) return;
+
+    const officialScore = scoreInput.trim() ? Number(scoreInput) : 0;
+    let finalScore = 0;
+    let finalMockScore = 0;
+    if (scoreMode === "official") {
+      finalScore = officialScore;
+    } else if (scoreMode === "mock") {
+      finalScore = form.mockScore;
+      finalMockScore = form.mockScore;
+    } else {
+      const mockScores = [combinedMock1, combinedMock2, combinedMock3]
+        .map((v) => (v.trim() ? Number(v) : 0))
+        .filter((v) => v > 0);
+      const avgMock = mockScores.length > 0 ? mockScores.reduce((sum, n) => sum + n, 0) / mockScores.length : 0;
+      finalMockScore = avgMock > 0 ? Math.round(avgMock) : 0;
+      finalScore = officialScore > 0 ? officialScore : Math.round(avgMock);
+    }
     if (finalScore <= 0) {
       toast.error("分数填写不完整，请检查");
       return;
@@ -155,8 +221,9 @@ export function ProfileForm() {
     const profile: UserProfile = {
       ...form,
       score: finalScore,
-      priorityMode: prefPriority,
-      futurePlan: prefFuture,
+      mockScore: finalMockScore,
+      priorityMode: prefPriority as PreferencePriority,
+      futurePlan: prefFuture as FuturePlan,
       schoolTierPreference,
       focusMajorReputation: form.focusMajorReputation
     };
@@ -174,63 +241,178 @@ export function ProfileForm() {
           <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
             本工具支持出分前用模考成绩提前规划，也支持出分后按正式成绩生成方案。
           </div>
+          <div className="rounded-lg border bg-muted/40 px-3 py-2">
+            <p className="text-sm font-medium">第 {currentStep} 步 / 共三步</p>
+            <p className="text-xs text-muted-foreground">
+              {currentStep === 1 && "第一步：基础与分数（先确定分数场景，再填写核心信息）"}
+              {currentStep === 2 && "第二步：硬约束排除（可选，填了会更贴合你的真实诉求）"}
+              {currentStep === 3 && "第三步：偏好与路径（确定排序偏好和规划方向）"}
+            </p>
+          </div>
         </CardHeader>
-        <CardContent>
-          <Tabs defaultValue="basic" className="w-full">
-            <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-flex">
-              <TabsTrigger value="basic">基础与分数</TabsTrigger>
-              <TabsTrigger value="hard">硬约束排除</TabsTrigger>
-              <TabsTrigger value="pref">偏好与路径</TabsTrigger>
-            </TabsList>
+        <CardContent className="space-y-6">
+          {currentStep === 1 && (
+            <div className="space-y-4">
+              <div className="space-y-2 rounded-lg border bg-muted/30 p-4">
+                <Label>先选择你目前的情况</Label>
+                <div className="grid gap-2 md:grid-cols-3">
+                  {[
+                    { value: "official", title: "我已经有正式高考分数", desc: "适用于出分后正式填报" },
+                    { value: "mock", title: "我现在只有模考/预估成绩", desc: "适用于出分前提前规划" },
+                    { value: "combined", title: "我想综合多个阶段成绩参考", desc: "系统会综合成绩给更稳妥方向" }
+                  ].map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setScoreMode(option.value as ScoreMode)}
+                      className={`rounded-md border px-3 py-3 text-left text-sm transition ${
+                        scoreMode === option.value
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-input bg-background hover:border-blue-400"
+                      }`}
+                    >
+                      <p className="font-medium">{option.title}</p>
+                      <p className={`mt-1 text-xs ${scoreMode === option.value ? "text-blue-100" : "text-muted-foreground"}`}>{option.desc}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
 
-            <TabsContent value="basic" className="space-y-4 pt-4">
               <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="score">高考分数（正式分）</Label>
-                  <Input
-                    id="score"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    placeholder="出分后填写正式成绩"
-                    className="no-spinner"
-                    value={scoreInput}
-                    onChange={(e) => {
-                      const digits = e.target.value.replace(/\D/g, "");
-                      setScoreInput(digits);
-                      if (digits === "") {
-                        setForm((f) => ({ ...f, score: 0 }));
-                        return;
-                      }
-                      const n = parseInt(digits, 10);
-                      setForm((f) => ({ ...f, score: Number.isNaN(n) ? 0 : n }));
-                    }}
-                  />
-                  <p className="text-xs text-muted-foreground">适用于正式出分后；仅填数字，不会出现前侧多余 0</p>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="mock-score">模考分数（预估 / 模考）</Label>
-                  <Input
-                    id="mock-score"
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="off"
-                    placeholder="出分前可只填模考分数"
-                    className="no-spinner"
-                    value={mockScoreInput}
-                    onChange={(e) => {
-                      const digits = e.target.value.replace(/\D/g, "");
-                      setMockScoreInput(digits);
-                      if (digits === "") {
-                        setForm((f) => ({ ...f, mockScore: 0 }));
-                        return;
-                      }
-                      const n = parseInt(digits, 10);
-                      setForm((f) => ({ ...f, mockScore: Number.isNaN(n) ? 0 : n }));
-                    }}
-                  />
-                  <p className="text-xs text-muted-foreground">适用于出分前预估志愿方案；有正式分时将优先使用正式分</p>
-                </div>
+                {scoreMode === "official" && (
+                  <div className="space-y-2 md:col-span-2">
+                    <Label htmlFor="score">高考分数（正式分）</Label>
+                    <Input
+                      id="score"
+                      type="text"
+                      inputMode="numeric"
+                      autoComplete="off"
+                      placeholder="出分后填写正式成绩"
+                      className="no-spinner"
+                      value={scoreInput}
+                      onChange={(e) => {
+                        const digits = e.target.value.replace(/\D/g, "");
+                        setScoreInput(digits);
+                        const n = digits === "" ? 0 : parseInt(digits, 10);
+                        setForm((f) => ({ ...f, score: Number.isNaN(n) ? 0 : n }));
+                      }}
+                    />
+                    <p className="text-xs text-muted-foreground">适用于正式出分后，系统将以正式分为准。</p>
+                  </div>
+                )}
+
+                {scoreMode === "mock" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="grade-mode">当前年级</Label>
+                      <Select value={gradeMode || undefined} onValueChange={(v) => setGradeMode(v as GradeMode)}>
+                        <SelectTrigger id="grade-mode">
+                          <SelectValue placeholder="请选择年级" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="high1">高一</SelectItem>
+                          <SelectItem value="high2">高二</SelectItem>
+                          <SelectItem value="high3">高三</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="mock-type">模考类型</Label>
+                      <Select value={mockExamType || undefined} onValueChange={setMockExamType}>
+                        <SelectTrigger id="mock-type">
+                          <SelectValue placeholder="请选择模考类型" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="high1-stage">高一阶段考试</SelectItem>
+                          <SelectItem value="high2-stage">高二阶段考试</SelectItem>
+                          <SelectItem value="high3-1">高三一模</SelectItem>
+                          <SelectItem value="high3-2">高三二模</SelectItem>
+                          <SelectItem value="high3-3">高三三模</SelectItem>
+                          <SelectItem value="other">其他校内大型考试</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-2 md:col-span-2">
+                      <Label htmlFor="mock-score">模考分数</Label>
+                      <Input
+                        id="mock-score"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        placeholder="请输入模考分数"
+                        className="no-spinner"
+                        value={mockScoreInput}
+                        onChange={(e) => {
+                          const digits = e.target.value.replace(/\D/g, "");
+                          setMockScoreInput(digits);
+                          const n = digits === "" ? 0 : parseInt(digits, 10);
+                          setForm((f) => ({ ...f, mockScore: Number.isNaN(n) ? 0 : n }));
+                        }}
+                      />
+                      <p className="text-xs text-muted-foreground">适用于出分前做提前规划。</p>
+                    </div>
+                  </>
+                )}
+
+                {scoreMode === "combined" && (
+                  <>
+                    <div className="space-y-2">
+                      <Label htmlFor="score-combined">高考正式分（如有）</Label>
+                      <Input
+                        id="score-combined"
+                        type="text"
+                        inputMode="numeric"
+                        autoComplete="off"
+                        placeholder="如暂无可留空"
+                        className="no-spinner"
+                        value={scoreInput}
+                        onChange={(e) => {
+                          const digits = e.target.value.replace(/\D/g, "");
+                          setScoreInput(digits);
+                          const n = digits === "" ? 0 : parseInt(digits, 10);
+                          setForm((f) => ({ ...f, score: Number.isNaN(n) ? 0 : n }));
+                        }}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="combined-1">一模分数</Label>
+                      <Input
+                        id="combined-1"
+                        type="text"
+                        inputMode="numeric"
+                        className="no-spinner"
+                        value={combinedMock1}
+                        onChange={(e) => setCombinedMock1(e.target.value.replace(/\D/g, ""))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="combined-2">二模分数</Label>
+                      <Input
+                        id="combined-2"
+                        type="text"
+                        inputMode="numeric"
+                        className="no-spinner"
+                        value={combinedMock2}
+                        onChange={(e) => setCombinedMock2(e.target.value.replace(/\D/g, ""))}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="combined-3">三模分数</Label>
+                      <Input
+                        id="combined-3"
+                        type="text"
+                        inputMode="numeric"
+                        className="no-spinner"
+                        value={combinedMock3}
+                        onChange={(e) => setCombinedMock3(e.target.value.replace(/\D/g, ""))}
+                      />
+                    </div>
+                    <p className="text-xs text-muted-foreground md:col-span-2">
+                      系统会综合不同阶段成绩做更稳妥的方向参考。
+                    </p>
+                  </>
+                )}
+
                 <div className="space-y-2">
                   <Label htmlFor="rank-range">全省位次（区间）</Label>
                   <Select
@@ -370,9 +552,11 @@ export function ProfileForm() {
                   <p className="text-xs text-muted-foreground">影响推荐城市偏好与排序权重</p>
                 </div>
               </div>
-            </TabsContent>
+            </div>
+          )}
 
-            <TabsContent value="hard" className="space-y-4 pt-4">
+          {currentStep === 2 && (
+            <div className="space-y-4">
               <div className="rounded-lg border border-dashed bg-muted/20 p-4">
                 <p className="text-sm font-medium">硬约束排除（可选）</p>
                 <p className="mt-1 text-xs text-muted-foreground">这部分为可选项，不填也可正常生成报告。只在你明确不考虑某些城市/省份/专业时再展开填写。</p>
@@ -490,7 +674,7 @@ export function ProfileForm() {
                   <Checkbox
                     id="private"
                     checked={form.acceptPrivate}
-                    onCheckedChange={(v) => setForm({ ...form, acceptPrivate: v === true })}
+                    onCheckedChange={(v) => setForm((f) => ({ ...f, acceptPrivate: v === true }))}
                   />
                   <Label htmlFor="private" className="font-normal">
                     接受民办院校
@@ -500,7 +684,7 @@ export function ProfileForm() {
                   <Checkbox
                     id="sino"
                     checked={form.acceptSinoForeign}
-                    onCheckedChange={(v) => setForm({ ...form, acceptSinoForeign: v === true })}
+                    onCheckedChange={(v) => setForm((f) => ({ ...f, acceptSinoForeign: v === true }))}
                   />
                   <Label htmlFor="sino" className="font-normal">
                     接受中外合作 / 高学费项目
@@ -510,7 +694,7 @@ export function ProfileForm() {
                   <Checkbox
                     id="adj"
                     checked={form.acceptAdjustment}
-                    onCheckedChange={(v) => setForm({ ...form, acceptAdjustment: v === true })}
+                    onCheckedChange={(v) => setForm((f) => ({ ...f, acceptAdjustment: v === true }))}
                   />
                   <Label htmlFor="adj" className="font-normal">
                     接受专业调剂
@@ -520,16 +704,18 @@ export function ProfileForm() {
                   <Checkbox
                     id="cold"
                     checked={form.acceptUnpopularMajor}
-                    onCheckedChange={(v) => setForm({ ...form, acceptUnpopularMajor: v === true })}
+                    onCheckedChange={(v) => setForm((f) => ({ ...f, acceptUnpopularMajor: v === true }))}
                   />
                   <Label htmlFor="cold" className="font-normal">
                     接受相对冷门专业
                   </Label>
                 </div>
               </div>
-            </TabsContent>
+            </div>
+          )}
 
-            <TabsContent value="pref" className="space-y-4 pt-4">
+          {currentStep === 3 && (
+            <div className="space-y-4">
               <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-4">
                 <p className="text-sm font-semibold text-blue-900">家长最关心：985 / 211 / 双一流优先怎么选</p>
                 <p className="mt-1 text-xs text-blue-800">这会直接影响推荐排序，建议先选一项最符合你家诉求的方向。</p>
@@ -593,10 +779,10 @@ export function ProfileForm() {
                     id="industries"
                     value={form.targetIndustries.join(",")}
                     onChange={(e) =>
-                      setForm({
-                        ...form,
+                      setForm((f) => ({
+                        ...f,
                         targetIndustries: e.target.value.split(",").map((s) => s.trim()).filter(Boolean)
-                      })
+                      }))
                     }
                   />
                   <p className="text-xs text-muted-foreground">用于匹配专业方向与就业路径</p>
@@ -664,8 +850,28 @@ export function ProfileForm() {
                   </Label>
                 </div>
               </div>
-            </TabsContent>
-          </Tabs>
+            </div>
+          )}
+
+          <div className="flex justify-between gap-2 border-t pt-4">
+            <Button
+              type="button"
+              variant="outline"
+              disabled={currentStep === 1}
+              onClick={() => setCurrentStep((s) => (s - 1) as 1 | 2)}
+            >
+              上一步
+            </Button>
+            {currentStep < 3 ? (
+              <Button type="button" onClick={goNextStep}>
+                下一步
+              </Button>
+            ) : (
+              <Button type="button" onClick={submit}>
+                生成报告
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
       <div className="flex justify-end gap-2">
@@ -673,9 +879,16 @@ export function ProfileForm() {
           type="button"
           variant="outline"
           onClick={() => {
+            setCurrentStep(1);
+            setScoreMode("");
             setForm(defaultProfile);
             setScoreInput(defaultProfile.score > 0 ? String(defaultProfile.score) : "");
             setMockScoreInput(defaultProfile.mockScore > 0 ? String(defaultProfile.mockScore) : "");
+            setCombinedMock1("");
+            setCombinedMock2("");
+            setCombinedMock3("");
+            setGradeMode("high3");
+            setMockExamType("high3-1");
             setTuitionTier(tuitionTierFromAmount(defaultProfile.tuitionMax));
             setCustomTuitionInput(
               tuitionTierFromAmount(defaultProfile.tuitionMax) === "other"
@@ -692,9 +905,6 @@ export function ProfileForm() {
           }}
         >
           恢复默认示例
-        </Button>
-        <Button type="button" onClick={submit}>
-          生成智能推荐
         </Button>
       </div>
     </div>

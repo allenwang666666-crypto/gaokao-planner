@@ -80,10 +80,10 @@ export default function HomePage() {
               <Badge className="w-fit bg-blue-600 text-white">本系统（更适合真实填报）</Badge>
               <CardDescription className="text-slate-700">
                 <ul className="space-y-1">
-                  <li>✅ <span className="font-semibold text-blue-700">更精准</span>：不只看分数，还会结合城市、专业、就业、成本一起判断。</li>
-                  <li>✅ <span className="font-semibold text-emerald-700">匹配度更高</span>：支持家庭偏好和硬约束，推荐更贴近真实可选方向。</li>
-                  <li>✅ <span className="font-semibold text-indigo-700">更有前瞻性</span>：不仅看当前热门，也看未来几年行业趋势和专业持续价值。</li>
-                  <li>✅ <span className="font-semibold text-violet-700">避免盲目追热度</span>：尽量减少“今天热门、明天被行业变化削弱”的风险。</li>
+                  <li>✅ <span className="font-semibold">更精准</span>：不只看分数，还会结合城市、专业、就业、成本一起判断。</li>
+                  <li>✅ <span className="font-semibold">匹配度更高</span>：支持家庭偏好和硬约束，推荐更贴近真实可选方向。</li>
+                  <li>✅ <span className="font-semibold">更有前瞻性</span>：不仅看当前热门，也看未来几年行业趋势和专业持续价值。</li>
+                  <li>✅ <span className="font-semibold">避免盲目追热度</span>：尽量减少“今天热门、明天被行业变化削弱”的风险。</li>
                 </ul>
               </CardDescription>
             </CardHeader>
