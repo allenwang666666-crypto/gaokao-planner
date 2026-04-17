@@ -23,9 +23,12 @@ export default function HomePage() {
           <br />
           3分钟生成一份真正能填的志愿方案
         </p>
-        <div className="mt-8">
-          <Button asChild size="lg" className="bg-white text-primary hover:bg-white/90">
-            <Link href="/intake">免费生成我的志愿方案</Link>
+        <div className="mt-8 flex flex-wrap gap-3">
+          <Button asChild size="lg" className="h-14 px-8 text-lg font-semibold bg-white text-primary hover:bg-white/90">
+            <Link href="/intake">开始生成我的志愿方案</Link>
+          </Button>
+          <Button asChild size="lg" variant="secondary" className="h-14 px-8 text-lg font-semibold bg-blue-700 text-white hover:bg-blue-800">
+            <Link href="/intake">先测一下孩子适合哪些学校</Link>
           </Button>
         </div>
       </section>
@@ -74,12 +77,14 @@ export default function HomePage() {
           </Card>
           <Card>
             <CardHeader>
-              <Badge className="w-fit">本系统</Badge>
-              <CardDescription>
-                - 多维决策（分数+城市+专业+就业+成本）
-                <br />- 支持排除城市/专业
-                <br />- 自动生成志愿方案
-                <br />- 每个推荐都有解释与风险提示
+              <Badge className="w-fit bg-blue-600 text-white">本系统（更适合真实填报）</Badge>
+              <CardDescription className="text-slate-700">
+                <ul className="space-y-1">
+                  <li>✅ <span className="font-semibold text-blue-700">更精准</span>：不只看分数，还会结合城市、专业、就业、成本一起判断。</li>
+                  <li>✅ <span className="font-semibold text-emerald-700">匹配度更高</span>：支持家庭偏好和硬约束，推荐更贴近真实可选方向。</li>
+                  <li>✅ <span className="font-semibold text-indigo-700">更有前瞻性</span>：不仅看当前热门，也看未来几年行业趋势和专业持续价值。</li>
+                  <li>✅ <span className="font-semibold text-violet-700">避免盲目追热度</span>：尽量减少“今天热门、明天被行业变化削弱”的风险。</li>
+                </ul>
               </CardDescription>
             </CardHeader>
           </Card>
@@ -97,8 +102,8 @@ export default function HomePage() {
               <br />- 不了解调剂风险
             </CardDescription>
             <div className="pt-2">
-              <Button asChild>
-                <Link href="/intake">看看我会不会踩这些坑</Link>
+              <Button asChild className="h-12 px-6 text-base font-semibold">
+                <Link href="/intake">立即查看适合我的填报方向</Link>
               </Button>
             </div>
           </CardHeader>

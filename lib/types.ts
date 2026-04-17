@@ -1,13 +1,21 @@
 export type PreferencePriority = "major" | "school" | "city";
 export type FuturePlan = "job" | "postgraduate" | "civil_service" | "abroad";
 export type RiskLabel = "冲" | "稳" | "保";
-export type StrategyType = "rushSchool" | "stableJob" | "nearHome" | "balanced";
+export type StrategyType = "planA" | "planB" | "nearHome" | "balanced";
+export type SchoolTierPreference =
+  | "985"
+  | "211"
+  | "double_first_class"
+  | "school_tier"
+  | "major_development"
+  | "balanced";
 
 export interface UserProfile {
   province: "安徽";
   city: string;
   district: string;
   subjectType: string;
+  mockScore: number;
   score: number;
   rank: number;
   budgetLevel: "low" | "medium" | "high";
@@ -24,6 +32,8 @@ export interface UserProfile {
   preferredRegions: string[];
   priorityMode: PreferencePriority;
   futurePlan: FuturePlan;
+  schoolTierPreference: SchoolTierPreference;
+  focusMajorReputation: boolean;
   targetIndustries: string[];
   personalityTags: string[];
   preferNearHome: boolean;

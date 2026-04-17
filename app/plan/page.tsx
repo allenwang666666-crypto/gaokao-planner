@@ -12,7 +12,7 @@ import { StrategyType } from "@/lib/types";
 export default function PlanPage() {
   const profile = loadProfile() ?? defaultProfile;
   const plans = useMemo(() => generateStrategyPlans(profile), [profile]);
-  const [active, setActive] = useState<StrategyType>("balanced");
+  const [active, setActive] = useState<StrategyType>("planA");
   const plan = plans.find((p) => p.strategy === active) ?? plans[0];
 
   return (
@@ -21,6 +21,9 @@ export default function PlanPage() {
         <CardHeader>
           <CardTitle className="text-xl">多策略志愿表生成</CardTitle>
           <CardDescription>切换策略查看不同排序逻辑下的志愿顺序，并导出 Excel / PDF。</CardDescription>
+          <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+            A / B 差异：方案A偏稳妥，优先录取概率；方案B偏冲刺，优先学校层次与城市资源。
+          </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <Tabs value={active} onValueChange={(v) => setActive(v as StrategyType)}>

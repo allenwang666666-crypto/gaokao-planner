@@ -14,9 +14,15 @@ function weights(profile: UserProfile, strategy: StrategyType) {
   if (profile.priorityMode === "major") { w.majorMatch += 0.1; w.schoolTier -= 0.05; w.cityPreference -= 0.05; }
   if (profile.priorityMode === "school") { w.schoolTier += 0.08; w.majorMatch -= 0.05; w.cityPreference -= 0.03; }
   if (profile.priorityMode === "city") { w.cityPreference += 0.1; w.admitSafety -= 0.05; w.schoolTier -= 0.05; }
-  if (strategy === "rushSchool") { w.schoolTier += 0.08; w.admitSafety -= 0.08; }
-  if (strategy === "stableJob") { w.futureFit += 0.06; w.admitSafety += 0.06; w.schoolTier -= 0.06; w.cityPreference -= 0.06; }
+  if (strategy === "planA") { w.admitSafety += 0.16; w.costFit += 0.06; w.schoolTier -= 0.10; w.cityPreference -= 0.06; w.majorMatch -= 0.06; }
+  if (strategy === "planB") { w.schoolTier += 0.16; w.cityPreference += 0.06; w.admitSafety -= 0.14; w.costFit -= 0.04; w.futureFit -= 0.04; }
   if (strategy === "nearHome") { w.cityPreference += 0.1; w.costFit += 0.05; w.schoolTier -= 0.05; w.majorMatch -= 0.05; w.admitSafety -= 0.05; }
+  if (profile.schoolTierPreference === "985") { w.schoolTier += 0.14; w.admitSafety -= 0.06; w.costFit -= 0.04; w.majorMatch -= 0.04; }
+  if (profile.schoolTierPreference === "211") { w.schoolTier += 0.1; w.admitSafety -= 0.04; w.costFit -= 0.03; w.majorMatch -= 0.03; }
+  if (profile.schoolTierPreference === "double_first_class") { w.schoolTier += 0.08; w.admitSafety -= 0.03; w.costFit -= 0.03; w.majorMatch -= 0.02; }
+  if (profile.schoolTierPreference === "school_tier") { w.schoolTier += 0.1; w.majorMatch -= 0.04; w.futureFit -= 0.03; w.admitSafety -= 0.03; }
+  if (profile.schoolTierPreference === "major_development") { w.majorMatch += 0.1; w.futureFit += 0.05; w.schoolTier -= 0.08; w.cityPreference -= 0.03; w.admitSafety -= 0.04; }
+  if (profile.focusMajorReputation) { w.majorMatch += 0.06; w.schoolTier += 0.03; w.costFit -= 0.03; w.admitSafety -= 0.02; }
   const sum = Object.values(w).reduce((s, n) => s + n, 0);
   return Object.fromEntries(Object.entries(w).map(([k, v]) => [k, Number((v / sum).toFixed(4))]));
 }
@@ -43,13 +49,23 @@ function futureFitValue(p: UserProfile, m: UniversityItem["majors"][number]) {
   return (m.employmentIndex + m.postgraduateIndex) / 2;
 }
 
+function tierPreferenceBonus(p: UserProfile, tier: UniversityItem["tier"]): number {
+  if (p.schoolTierPreference === "balanced") return 0;
+  if (p.schoolTierPreference === "major_development") return 0;
+  if (p.schoolTierPreference === "985") return tier === "985" ? 20 : tier === "211" ? 8 : -3;
+  if (p.schoolTierPreference === "211") return tier === "985" || tier === "211" ? 14 : tier === "双一流" ? 8 : -2;
+  if (p.schoolTierPreference === "double_first_class") return tier === "985" || tier === "211" || tier === "双一流" ? 10 : -1;
+  return tier === "985" || tier === "211" ? 12 : tier === "双一流" ? 8 : 0;
+}
+
 function score(p: UserProfile, s: UniversityItem, m: UniversityItem["majors"][number], st: StrategyType): ScoreBreakdown {
   const rank = Math.max(p.rank, 1);
   const averageRank = avgRank(m.admission);
   const admitSafety = normalize((averageRank / rank) * 100) * 100;
   const industryBonus = p.targetIndustries.some((tag) => m.industryTags.includes(tag)) ? 10 : 0;
-  const majorMatch = Math.min(100, m.employmentIndex * 0.35 + m.postgraduateIndex * 0.25 + m.popularity * 0.2 + industryBonus + (100 - m.adjustmentRisk) * 0.2);
-  const schoolTier = tierScoreMap[s.tier];
+  const fameBonus = p.focusMajorReputation ? m.popularity * 0.12 : 0;
+  const majorMatch = Math.min(100, m.employmentIndex * 0.35 + m.postgraduateIndex * 0.25 + m.popularity * 0.2 + fameBonus + industryBonus + (100 - m.adjustmentRisk) * 0.2);
+  const schoolTier = Math.min(100, tierScoreMap[s.tier] + tierPreferenceBonus(p, s.tier));
   const distancePenalty = p.preferNearHome ? Math.max(0, s.distanceKmFromXiaoXian / 20) : Math.max(0, s.distanceKmFromXiaoXian / 40);
   const cityBonus = p.preferredCities.includes(s.city) ? 15 : 0;
   const cityPreference = Math.max(1, Math.min(100, s.cityDevelopmentIndex * 0.45 + s.transportConvenience * 0.35 + cityBonus - distancePenalty));
@@ -84,7 +100,11 @@ function byStrategy(profile: UserProfile, strategy: StrategyType): Recommendatio
         recommendReason: [
           `${major.name}与目标行业匹配，且就业指数 ${major.employmentIndex}/100。`,
           `${school.city}交通便利度 ${school.transportConvenience}/100，符合异地适应和往返效率。`,
-          `综合分 ${breakdown.total}，由专业/城市/风险/成本联合打分。`
+          `综合分 ${breakdown.total}，由专业/城市/风险/成本联合打分。`,
+          ...(profile.focusMajorReputation ? ["该推荐兼顾专业知名度与发展潜力。"] : []),
+          ...(profile.schoolTierPreference !== "balanced"
+            ? [`已按「${profile.schoolTierPreference === "985" ? "985优先" : profile.schoolTierPreference === "211" ? "211优先" : profile.schoolTierPreference === "double_first_class" ? "双一流优先" : profile.schoolTierPreference === "school_tier" ? "更看重学校层次" : "更看重专业实际发展"}」做了权重倾斜。`]
+            : [])
         ],
         riskTips: [r === "冲" ? "冲刺志愿，建议搭配更多稳保项。" : "风险总体可控，注意计划数波动。", major.adjustmentRisk > 38 ? "该专业调剂风险偏高。" : "调剂风险相对可控。"],
         tuition: major.tuition,
@@ -92,13 +112,24 @@ function byStrategy(profile: UserProfile, strategy: StrategyType): Recommendatio
       });
     }
   }
-  return out.sort((a, b) => b.matchScore - a.matchScore).slice(0, 16);
+  const adjusted = out.map((item) => {
+    let score = item.matchScore;
+    if (strategy === "planA") {
+      score += item.riskLabel === "保" ? 6 : item.riskLabel === "稳" ? 3 : -8;
+    }
+    if (strategy === "planB") {
+      score += item.riskLabel === "冲" ? 6 : item.riskLabel === "稳" ? 1 : -5;
+      score += item.tierLabel === "985" ? 8 : item.tierLabel === "211" ? 5 : item.tierLabel === "双一流" ? 3 : 0;
+    }
+    return { ...item, matchScore: +score.toFixed(2) };
+  });
+  return adjusted.sort((a, b) => b.matchScore - a.matchScore).slice(0, 16);
 }
 
 export function generateStrategyPlans(profile: UserProfile = defaultProfile): StrategyPlan[] {
   return [
-    { strategy: "rushSchool", title: "冲学校版本", description: "提高院校层次权重，接受一定录取波动。", items: byStrategy(profile, "rushSchool") },
-    { strategy: "stableJob", title: "稳就业版本", description: "优先就业导向专业与城市产业匹配，控制录取风险。", items: byStrategy(profile, "stableJob") },
+    { strategy: "planA", title: "方案A（稳妥优先）", description: "更看重录取概率与成本可控，优先稳和保，适合保守填报。", items: byStrategy(profile, "planA") },
+    { strategy: "planB", title: "方案B（冲刺优先）", description: "更看重学校层次与城市资源，允许更高波动，适合想冲更高层次。", items: byStrategy(profile, "planB") },
     { strategy: "nearHome", title: "离家近版本", description: "优先安徽及周边高铁可达城市，兼顾成本。", items: byStrategy(profile, "nearHome") },
     { strategy: "balanced", title: "综合平衡版本", description: "在学校层次、专业发展、城市和风险之间做均衡。", items: byStrategy(profile, "balanced") }
   ];

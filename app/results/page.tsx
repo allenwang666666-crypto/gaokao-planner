@@ -16,19 +16,26 @@ import { StrategyType } from "@/lib/types";
 
 export default function ResultsPage() {
   const [profile, setProfile] = useState(() => loadProfile() ?? defaultProfile);
-  const [active, setActive] = useState<StrategyType>("balanced");
+  const [active, setActive] = useState<StrategyType>("planA");
   const [quickExcludeCity, setQuickExcludeCity] = useState("");
   const plans = useMemo(() => generateStrategyPlans(profile), [profile]);
   const current = plans.find((p) => p.strategy === active) ?? plans[0];
+  const planA = plans.find((p) => p.strategy === "planA");
+  const planB = plans.find((p) => p.strategy === "planB");
   const [leftId, setLeftId] = useState("");
   const [rightId, setRightId] = useState("");
-  const options = current.items.map((i) => ({
+  const leftOptions = (planA?.items ?? []).map((i) => ({
     id: `${i.universityId}-${i.majorId}`,
     label: `${i.universityName}-${i.majorName}`,
     item: i
   }));
-  const left = options.find((o) => o.id === leftId)?.item;
-  const right = options.find((o) => o.id === rightId)?.item;
+  const rightOptions = (planB?.items ?? []).map((i) => ({
+    id: `${i.universityId}-${i.majorId}`,
+    label: `${i.universityName}-${i.majorName}`,
+    item: i
+  }));
+  const left = leftOptions.find((o) => o.id === leftId)?.item;
+  const right = rightOptions.find((o) => o.id === rightId)?.item;
 
   const recalcExclude = () => {
     const city = quickExcludeCity.trim();
@@ -49,11 +56,17 @@ export default function ResultsPage() {
         <CardHeader>
           <CardTitle className="text-xl">推荐结果（解释型）</CardTitle>
           <CardDescription>
-            当前画像：{profile.city}
-            {profile.district} · 分数 {profile.score} · 位次 {profile.rank}
+            当前画像：{profile.city || "未填写城市"}
+            {profile.district || ""} · 采用分数 {profile.score} · 位次 {profile.rank}
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
+          <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+            真实性提示：当前结果基于项目内置示意数据与规则引擎，用于志愿规划与方向参考；正式填报前请结合安徽省教育考试院及院校当年最新投档线、位次、专业分数线、招生计划、选科要求进一步核实。
+          </div>
+          <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm text-blue-900">
+            方案差异说明：方案A更稳妥、更重录取概率；方案B更冲刺、更重学校层次和城市资源。
+          </div>
           <Tabs value={active} onValueChange={(v) => setActive(v as StrategyType)}>
             <TabsList className="flex h-auto w-full flex-wrap justify-start gap-1">
               {plans.map((plan) => (
@@ -88,8 +101,8 @@ export default function ResultsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-xl">院校 / 专业对比</CardTitle>
-          <CardDescription>基于当前策略下的推荐列表，双选对比维度。</CardDescription>
+          <CardTitle className="text-xl">方案A / 方案B 对比</CardTitle>
+          <CardDescription>请分别选择稳妥方案与冲刺方案，查看学校层次、风险和发展差异。</CardDescription>
         </CardHeader>
         <CardContent className="space-y-3">
           <div className="grid gap-2 md:grid-cols-2">
@@ -98,8 +111,8 @@ export default function ResultsPage() {
               value={leftId}
               onChange={(e) => setLeftId(e.target.value)}
             >
-              <option value="">选择方案 A</option>
-              {options.map((o) => (
+              <option value="">选择方案 A（稳妥优先）</option>
+              {leftOptions.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.label}
                 </option>
@@ -110,8 +123,8 @@ export default function ResultsPage() {
               value={rightId}
               onChange={(e) => setRightId(e.target.value)}
             >
-              <option value="">选择方案 B</option>
-              {options.map((o) => (
+              <option value="">选择方案 B（冲刺优先）</option>
+              {rightOptions.map((o) => (
                 <option key={o.id} value={o.id}>
                   {o.label}
                 </option>

@@ -13,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { defaultProfile, emptyIntakeProfile } from "@/lib/mock-data";
 import { saveProfile } from "@/lib/storage";
-import type { FuturePlan, PreferencePriority, UserProfile } from "@/lib/types";
+import type { FuturePlan, PreferencePriority, SchoolTierPreference, UserProfile } from "@/lib/types";
 
 const rankRangeOptions = [
   { label: "1–1000", value: "1-1000", rank: 500 },
@@ -59,6 +59,15 @@ const majorQuickTags = [
   "经管类"
 ] as const;
 
+const schoolTierPreferenceOptions: { value: SchoolTierPreference; label: string; tip: string }[] = [
+  { value: "985", label: "985优先", tip: "优先把 985 放到更靠前位置" },
+  { value: "211", label: "211优先", tip: "优先考虑 211 及以上院校" },
+  { value: "double_first_class", label: "双一流优先", tip: "优先考虑双一流及以上院校" },
+  { value: "school_tier", label: "更看重学校层次", tip: "院校名气和层次更重要" },
+  { value: "major_development", label: "更看重专业实际发展", tip: "更看重专业就业与长期发展" },
+  { value: "balanced", label: "综合平衡", tip: "学校层次和专业发展都兼顾" }
+];
+
 /** 可接受学费区间（元/年），选中后映射为 tuitionMax 中位数/上限供推荐逻辑使用 */
 const tuitionTierOptions = [
   { label: "5000 元/年以下", value: "0-5000", tuitionMax: 5000 },
@@ -85,6 +94,7 @@ export function ProfileForm() {
   const [form, setForm] = useState<UserProfile>(emptyIntakeProfile);
   /** 分数用字符串展示，避免 number 输入前导 0、步进器问题 */
   const [scoreInput, setScoreInput] = useState("");
+  const [mockScoreInput, setMockScoreInput] = useState("");
   const [tuitionTier, setTuitionTier] = useState("");
   const [customTuitionInput, setCustomTuitionInput] = useState("");
   const [selectedRankRange, setSelectedRankRange] = useState("");
@@ -93,13 +103,14 @@ export function ProfileForm() {
   const [selectedRegionPreference, setSelectedRegionPreference] = useState("");
   const [prefPriority, setPrefPriority] = useState<PreferencePriority | undefined>(undefined);
   const [prefFuture, setPrefFuture] = useState<FuturePlan | undefined>(undefined);
+  const [schoolTierPreference, setSchoolTierPreference] = useState<SchoolTierPreference>("balanced");
   const [excludeCity, setExcludeCity] = useState("");
   const [excludeProvince, setExcludeProvince] = useState("");
   const [excludeMajor, setExcludeMajor] = useState("");
 
   const submit = () => {
-    if (!scoreInput.trim() || form.score <= 0) {
-      toast.error("请填写高考分数");
+    if (!scoreInput.trim() && !mockScoreInput.trim()) {
+      toast.error("请填写高考分数或模考分数");
       return;
     }
     if (!selectedRankRange) {
@@ -135,10 +146,19 @@ export function ProfileForm() {
       return;
     }
 
+    const finalScore = scoreInput.trim() ? form.score : form.mockScore;
+    if (finalScore <= 0) {
+      toast.error("分数填写不完整，请检查");
+      return;
+    }
+
     const profile: UserProfile = {
       ...form,
+      score: finalScore,
       priorityMode: prefPriority,
-      futurePlan: prefFuture
+      futurePlan: prefFuture,
+      schoolTierPreference,
+      focusMajorReputation: form.focusMajorReputation
     };
     saveProfile(profile);
     toast.success("画像已保存", { description: "正在进入推荐结果页" });
@@ -150,7 +170,10 @@ export function ProfileForm() {
       <Card>
         <CardHeader>
           <CardTitle className="text-xl">安徽考生信息采集</CardTitle>
-          <CardDescription>默认籍贯宿州萧县；分步填写基础信息、硬约束与偏好，数据仅存于本机浏览器。</CardDescription>
+          <CardDescription>分步填写核心信息与偏好，数据仅存于本机浏览器。</CardDescription>
+          <div className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-900">
+            本工具支持出分前用模考成绩提前规划，也支持出分后按正式成绩生成方案。
+          </div>
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="basic" className="w-full">
@@ -163,13 +186,13 @@ export function ProfileForm() {
             <TabsContent value="basic" className="space-y-4 pt-4">
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="score">高考分数</Label>
+                  <Label htmlFor="score">高考分数（正式分）</Label>
                   <Input
                     id="score"
                     type="text"
                     inputMode="numeric"
                     autoComplete="off"
-                    placeholder="请输入分数"
+                    placeholder="出分后填写正式成绩"
                     className="no-spinner"
                     value={scoreInput}
                     onChange={(e) => {
@@ -183,7 +206,30 @@ export function ProfileForm() {
                       setForm((f) => ({ ...f, score: Number.isNaN(n) ? 0 : n }));
                     }}
                   />
-                  <p className="text-xs text-muted-foreground">仅填数字，不会出现前侧多余 0</p>
+                  <p className="text-xs text-muted-foreground">适用于正式出分后；仅填数字，不会出现前侧多余 0</p>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="mock-score">模考分数（预估 / 模考）</Label>
+                  <Input
+                    id="mock-score"
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="off"
+                    placeholder="出分前可只填模考分数"
+                    className="no-spinner"
+                    value={mockScoreInput}
+                    onChange={(e) => {
+                      const digits = e.target.value.replace(/\D/g, "");
+                      setMockScoreInput(digits);
+                      if (digits === "") {
+                        setForm((f) => ({ ...f, mockScore: 0 }));
+                        return;
+                      }
+                      const n = parseInt(digits, 10);
+                      setForm((f) => ({ ...f, mockScore: Number.isNaN(n) ? 0 : n }));
+                    }}
+                  />
+                  <p className="text-xs text-muted-foreground">适用于出分前预估志愿方案；有正式分时将优先使用正式分</p>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="rank-range">全省位次（区间）</Label>
@@ -327,115 +373,116 @@ export function ProfileForm() {
             </TabsContent>
 
             <TabsContent value="hard" className="space-y-4 pt-4">
-              <div className="rounded-lg border p-4">
-                <p className="mb-3 text-sm font-medium">明确不考虑的城市 / 省份 / 专业</p>
-                <div className="flex flex-col gap-3 sm:flex-row">
-                  <div className="flex flex-1 gap-2">
-                    <Input
-                      placeholder="排除城市，如：广州"
-                      value={excludeCity}
-                      onChange={(e) => setExcludeCity(e.target.value)}
-                    />
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => {
-                        if (!excludeCity.trim()) return;
-                        setForm({
-                          ...form,
-                          excludedCities: Array.from(new Set([...form.excludedCities, excludeCity.trim()]))
-                        });
-                        setExcludeCity("");
-                      }}
-                    >
-                      添加城市
-                    </Button>
-                  </div>
-                </div>
-                <div className="mt-3 flex flex-col gap-3 sm:flex-row">
-                  <div className="flex flex-1 gap-2">
-                    <Input
-                      placeholder="排除省份，如：黑龙江"
-                      value={excludeProvince}
-                      onChange={(e) => setExcludeProvince(e.target.value)}
-                    />
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => {
-                        if (!excludeProvince.trim()) return;
-                        setForm({
-                          ...form,
-                          excludedProvinces: Array.from(new Set([...form.excludedProvinces, excludeProvince.trim()]))
-                        });
-                        setExcludeProvince("");
-                      }}
-                    >
-                      添加省份
-                    </Button>
-                  </div>
-                </div>
-                <p className="mt-3 text-xs text-muted-foreground">
-                  城市：{form.excludedCities.join("、") || "无"}；省份：
-                  {form.excludedProvinces.join("、") || "无"}；专业：{form.excludedMajors.join("、") || "无"}
-                </p>
-              </div>
-              <div className="rounded-lg border p-4">
-                <p className="mb-2 text-sm font-medium">专业排除快速标签（硬约束）</p>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  {majorQuickTags.map((tag) => {
-                    const checked = form.excludedMajors.includes(tag);
-                    return (
-                      <div key={tag} className="flex items-center gap-2">
-                        <Checkbox
-                          id={`major-tag-${tag}`}
-                          checked={checked}
-                          onCheckedChange={(value) => {
-                            if (value === true) {
-                              setForm({
-                                ...form,
-                                excludedMajors: Array.from(new Set([...form.excludedMajors, tag]))
-                              });
-                            } else {
-                              setForm({
-                                ...form,
-                                excludedMajors: form.excludedMajors.filter((item) => item !== tag)
-                              });
-                            }
-                          }}
+              <div className="rounded-lg border border-dashed bg-muted/20 p-4">
+                <p className="text-sm font-medium">硬约束排除（可选）</p>
+                <p className="mt-1 text-xs text-muted-foreground">这部分为可选项，不填也可正常生成报告。只在你明确不考虑某些城市/省份/专业时再展开填写。</p>
+                <details className="mt-3 rounded-md border bg-background p-3">
+                  <summary className="cursor-pointer text-sm font-medium">展开高级筛选（可选）</summary>
+                  <div className="mt-3 space-y-3">
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <div className="flex flex-1 gap-2">
+                        <Input
+                          placeholder="排除城市，如：广州"
+                          value={excludeCity}
+                          onChange={(e) => setExcludeCity(e.target.value)}
                         />
-                        <Label htmlFor={`major-tag-${tag}`} className="font-normal">
-                          {tag}
-                        </Label>
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => {
+                            if (!excludeCity.trim()) return;
+                            setForm((f) => ({
+                              ...f,
+                              excludedCities: Array.from(new Set([...f.excludedCities, excludeCity.trim()]))
+                            }));
+                            setExcludeCity("");
+                          }}
+                        >
+                          添加城市
+                        </Button>
                       </div>
-                    );
-                  })}
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">先勾选大类，再在下方补充具体专业</p>
-              </div>
-              <div className="rounded-lg border p-4">
-                <p className="mb-2 text-sm font-medium">专业排除补充输入</p>
-                <div className="flex flex-col gap-2 sm:flex-row">
-                  <Input
-                    placeholder="补充不考虑专业，例如：口腔医学"
-                    value={excludeMajor}
-                    onChange={(e) => setExcludeMajor(e.target.value)}
-                  />
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    onClick={() => {
-                      if (!excludeMajor.trim()) return;
-                      setForm({
-                        ...form,
-                        excludedMajors: Array.from(new Set([...form.excludedMajors, excludeMajor.trim()]))
-                      });
-                      setExcludeMajor("");
-                    }}
-                  >
-                    添加专业
-                  </Button>
-                </div>
+                    </div>
+                    <div className="flex flex-col gap-3 sm:flex-row">
+                      <div className="flex flex-1 gap-2">
+                        <Input
+                          placeholder="排除省份，如：黑龙江"
+                          value={excludeProvince}
+                          onChange={(e) => setExcludeProvince(e.target.value)}
+                        />
+                        <Button
+                          type="button"
+                          variant="secondary"
+                          onClick={() => {
+                            if (!excludeProvince.trim()) return;
+                            setForm((f) => ({
+                              ...f,
+                              excludedProvinces: Array.from(new Set([...f.excludedProvinces, excludeProvince.trim()]))
+                            }));
+                            setExcludeProvince("");
+                          }}
+                        >
+                          添加省份
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="rounded-lg border p-3">
+                      <p className="mb-2 text-sm font-medium">专业排除快速标签（可选）</p>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        {majorQuickTags.map((tag) => {
+                          const checked = form.excludedMajors.includes(tag);
+                          return (
+                            <div key={tag} className="flex items-center gap-2">
+                              <Checkbox
+                                id={`major-tag-${tag}`}
+                                checked={checked}
+                                onCheckedChange={(value) => {
+                                  if (value === true) {
+                                    setForm((f) => ({
+                                      ...f,
+                                      excludedMajors: Array.from(new Set([...f.excludedMajors, tag]))
+                                    }));
+                                  } else {
+                                    setForm((f) => ({
+                                      ...f,
+                                      excludedMajors: f.excludedMajors.filter((item) => item !== tag)
+                                    }));
+                                  }
+                                }}
+                              />
+                              <Label htmlFor={`major-tag-${tag}`} className="font-normal">
+                                {tag}
+                              </Label>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      <Input
+                        placeholder="补充不考虑专业，例如：口腔医学"
+                        value={excludeMajor}
+                        onChange={(e) => setExcludeMajor(e.target.value)}
+                      />
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        onClick={() => {
+                          if (!excludeMajor.trim()) return;
+                          setForm((f) => ({
+                            ...f,
+                            excludedMajors: Array.from(new Set([...f.excludedMajors, excludeMajor.trim()]))
+                          }));
+                          setExcludeMajor("");
+                        }}
+                      >
+                        添加专业
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      当前已排除：城市 {form.excludedCities.join("、") || "无"}；省份 {form.excludedProvinces.join("、") || "无"}；专业 {form.excludedMajors.join("、") || "无"}
+                    </p>
+                  </div>
+                </details>
               </div>
               <Separator />
               <div className="grid gap-4 sm:grid-cols-2">
@@ -483,6 +530,27 @@ export function ProfileForm() {
             </TabsContent>
 
             <TabsContent value="pref" className="space-y-4 pt-4">
+              <div className="rounded-lg border-2 border-blue-200 bg-blue-50 p-4">
+                <p className="text-sm font-semibold text-blue-900">家长最关心：985 / 211 / 双一流优先怎么选</p>
+                <p className="mt-1 text-xs text-blue-800">这会直接影响推荐排序，建议先选一项最符合你家诉求的方向。</p>
+                <div className="mt-3 grid gap-2 md:grid-cols-2">
+                  {schoolTierPreferenceOptions.map((option) => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => setSchoolTierPreference(option.value)}
+                      className={`rounded-md border px-3 py-2 text-left text-sm transition ${
+                        schoolTierPreference === option.value
+                          ? "border-blue-600 bg-blue-600 text-white"
+                          : "border-blue-200 bg-white text-slate-700 hover:border-blue-400"
+                      }`}
+                    >
+                      <p className="font-medium">{option.label}</p>
+                      <p className={`text-xs ${schoolTierPreference === option.value ? "text-blue-100" : "text-muted-foreground"}`}>{option.tip}</p>
+                    </button>
+                  ))}
+                </div>
+              </div>
               <div className="grid gap-4 md:grid-cols-2">
                 <div className="space-y-2">
                   <Label htmlFor="priority">排序偏好</Label>
@@ -535,11 +603,21 @@ export function ProfileForm() {
                 </div>
               </div>
               <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex items-center gap-2 sm:col-span-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2">
+                  <Checkbox
+                    id="major-fame"
+                    checked={form.focusMajorReputation}
+                    onCheckedChange={(v) => setForm((f) => ({ ...f, focusMajorReputation: v === true }))}
+                  />
+                  <Label htmlFor="major-fame" className="font-normal text-amber-900">
+                    着重专业知名度（家长更容易认可、社会认知度更高）
+                  </Label>
+                </div>
                 <div className="flex items-center gap-2">
                   <Checkbox
                     id="near"
                     checked={form.preferNearHome}
-                    onCheckedChange={(v) => setForm({ ...form, preferNearHome: v === true })}
+                    onCheckedChange={(v) => setForm((f) => ({ ...f, preferNearHome: v === true }))}
                   />
                   <Label htmlFor="near" className="font-normal">
                     倾向离家近 / 高铁可达
@@ -549,7 +627,7 @@ export function ProfileForm() {
                   <Checkbox
                     id="leave"
                     checked={form.willingLeaveAnhui}
-                    onCheckedChange={(v) => setForm({ ...form, willingLeaveAnhui: v === true })}
+                    onCheckedChange={(v) => setForm((f) => ({ ...f, willingLeaveAnhui: v === true }))}
                   />
                   <Label htmlFor="leave" className="font-normal">
                     愿意出省就读
@@ -559,7 +637,7 @@ export function ProfileForm() {
                   <Checkbox
                     id="campus"
                     checked={form.valueCampus}
-                    onCheckedChange={(v) => setForm({ ...form, valueCampus: v === true })}
+                    onCheckedChange={(v) => setForm((f) => ({ ...f, valueCampus: v === true }))}
                   />
                   <Label htmlFor="campus" className="font-normal">
                     看重校园环境
@@ -569,7 +647,7 @@ export function ProfileForm() {
                   <Checkbox
                     id="citydev"
                     checked={form.valueCityDevelopment}
-                    onCheckedChange={(v) => setForm({ ...form, valueCityDevelopment: v === true })}
+                    onCheckedChange={(v) => setForm((f) => ({ ...f, valueCityDevelopment: v === true }))}
                   />
                   <Label htmlFor="citydev" className="font-normal">
                     看重城市发展
@@ -579,7 +657,7 @@ export function ProfileForm() {
                   <Checkbox
                     id="localjob"
                     checked={form.planWorkLocallyAfterGrad}
-                    onCheckedChange={(v) => setForm({ ...form, planWorkLocallyAfterGrad: v === true })}
+                    onCheckedChange={(v) => setForm((f) => ({ ...f, planWorkLocallyAfterGrad: v === true }))}
                   />
                   <Label htmlFor="localjob" className="font-normal">
                     希望本科毕业后留在读书城市工作
@@ -597,6 +675,7 @@ export function ProfileForm() {
           onClick={() => {
             setForm(defaultProfile);
             setScoreInput(defaultProfile.score > 0 ? String(defaultProfile.score) : "");
+            setMockScoreInput(defaultProfile.mockScore > 0 ? String(defaultProfile.mockScore) : "");
             setTuitionTier(tuitionTierFromAmount(defaultProfile.tuitionMax));
             setCustomTuitionInput(
               tuitionTierFromAmount(defaultProfile.tuitionMax) === "other"
@@ -609,6 +688,7 @@ export function ProfileForm() {
             setSelectedRegionPreference("长三角优先（江苏/浙江/上海）");
             setPrefPriority(defaultProfile.priorityMode);
             setPrefFuture(defaultProfile.futurePlan);
+            setSchoolTierPreference(defaultProfile.schoolTierPreference);
           }}
         >
           恢复默认示例
