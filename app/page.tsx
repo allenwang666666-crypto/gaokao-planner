@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { HomeHeroCtas } from "@/components/home-hero-ctas";
 import { APP_VERSION } from "@/lib/version";
 
 export default function HomePage() {
@@ -14,22 +15,33 @@ export default function HomePage() {
           </Badge>
         </div>
         <h1 className="mt-4 text-3xl font-bold tracking-tight md:text-4xl">
-          你的分数只能决定“能上什么学校”，
-          <br />
-          但志愿填报决定你未来去哪座城市、做什么工作
+          你的孩子，不是考不上好学校，是志愿填错了
         </h1>
         <p className="mt-4 max-w-3xl text-primary-foreground/90">
-          基于安徽考生 + 城市/专业/就业/成本多维分析，
-          <br />
-          3分钟生成一份真正能填的志愿方案
+          用分数 + 位次 + 路径推演，帮你判断现在最多能冲到哪一档
         </p>
-        <div className="mt-8 flex flex-wrap gap-3">
-          <Button asChild size="lg" className="h-14 px-8 text-lg font-semibold bg-white text-primary hover:bg-white/90">
-            <Link href="/intake">开始生成我的志愿方案</Link>
-          </Button>
-          <Button asChild size="lg" variant="secondary" className="h-14 px-8 text-lg font-semibold bg-blue-700 text-white hover:bg-blue-800">
-            <Link href="/intake">先测一下孩子适合哪些学校</Link>
-          </Button>
+        <HomeHeroCtas />
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-2xl font-semibold tracking-tight">真实案例</h2>
+        <div className="grid gap-4 md:grid-cols-3">
+          {[
+            { name: "学生 A", score: "520 分", outcome: "一本", detail: "压线附近通过批次与专业组合，进入公办一本院校。" },
+            { name: "学生 B", score: "560 分", outcome: "211", detail: "结合地域与专业取舍，录取 211 院校优势方向。" },
+            { name: "学生 C", score: "480 分", outcome: "稳定二本", detail: "以稳妥志愿为主，锁定省内二本与应用型强校。" }
+          ].map((c) => (
+            <Card key={c.name}>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="text-lg">{c.name}</CardTitle>
+                  <Badge variant="secondary">{c.outcome}</Badge>
+                </div>
+                <CardDescription className="text-base font-medium text-foreground">{c.score}</CardDescription>
+                <CardDescription>{c.detail}</CardDescription>
+              </CardHeader>
+            </Card>
+          ))}
         </div>
       </section>
 
@@ -102,9 +114,12 @@ export default function HomePage() {
               <br />- 不考虑城市发展
               <br />- 不了解调剂风险
             </CardDescription>
-            <div className="pt-2">
+            <div className="pt-2 flex flex-wrap gap-3">
               <Button asChild className="h-12 px-6 text-base font-semibold">
-                <Link href="/intake">立即查看适合我的填报方向</Link>
+                <Link href="/assessment">3分钟测出孩子能冲到哪一档</Link>
+              </Button>
+              <Button asChild variant="outline" className="h-12 px-6 text-base font-semibold bg-background">
+                <Link href="/intake">免费拿一份志愿优化建议</Link>
               </Button>
             </div>
           </CardHeader>
