@@ -89,8 +89,7 @@ function ResultsView() {
   const searchParams = useSearchParams();
   const [stored] = useState(() => loadProfile() ?? defaultProfile);
   const [wechatOpen, setWechatOpen] = useState(false);
-  const [isLoading, setIsLoading] = useState(false);
-  const [hasGenerated, setHasGenerated] = useState(false);
+  const [isAnalyzing, setIsAnalyzing] = useState(true);
   const [loadingStageIndex, setLoadingStageIndex] = useState(0);
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [showUnlock, setShowUnlock] = useState(false);
@@ -100,44 +99,39 @@ function ResultsView() {
 
   const gradeLabel = gradeToLabel(searchParams.get("grade"));
   const loadingStages = [
-    "正在分析分数与位次匹配关系...",
+    "正在分析分数与位次关系...",
     "正在匹配近3年院校录取数据...",
-    "正在评估冲刺/稳妥/保底概率...",
-    "正在生成志愿填报路径建议...",
-    "即将生成你的专属志愿方案..."
+    "正在计算冲稳保概率...",
+    "正在生成最优志愿路径...",
+    "检测到当前志愿存在风险，正在优化方案..."
   ] as const;
 
   useEffect(() => {
-    if (!hasGenerated) return;
-    setShowUnlock(false);
-    const unlockTimer = setTimeout(() => setShowUnlock(true), 7000);
-    return () => clearTimeout(unlockTimer);
-  }, [hasGenerated]);
-
-  const startGenerateReport = () => {
-    setHasGenerated(false);
-    setShowUnlock(false);
-    setIsLoading(true);
+    setIsAnalyzing(true);
     setLoadingStageIndex(0);
     setLoadingProgress(0);
-
-    const phaseInterval = setInterval(() => {
-      setLoadingStageIndex((prev) => (prev >= 4 ? 4 : prev + 1));
-    }, 2000);
-
-    const progressInterval = setInterval(() => {
-      setLoadingProgress((prev) => (prev >= 98 ? prev : prev + 2));
-    }, 180);
-
-    setTimeout(() => {
-      clearInterval(phaseInterval);
-      clearInterval(progressInterval);
+    setShowUnlock(false);
+    const phaseInterval = setInterval(() => setLoadingStageIndex((prev) => (prev >= 4 ? 4 : prev + 1)), 3000);
+    const progressInterval = setInterval(() => setLoadingProgress((prev) => (prev >= 98 ? prev : prev + 1)), 150);
+    const analyzeTimer = setTimeout(() => {
       setLoadingStageIndex(4);
       setLoadingProgress(100);
-      setIsLoading(false);
-      setHasGenerated(true);
-    }, 9000);
-  };
+      setIsAnalyzing(false);
+      setShowUnlock(false);
+    }, 15000);
+
+    return () => {
+      clearInterval(phaseInterval);
+      clearInterval(progressInterval);
+      clearTimeout(analyzeTimer);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (isAnalyzing) return;
+    const unlockTimer = setTimeout(() => setShowUnlock(true), 7000);
+    return () => clearTimeout(unlockTimer);
+  }, [isAnalyzing]);
 
   const previewSchools = useMemo(() => {
     if (currentTier === "有机会冲211") {
@@ -164,45 +158,34 @@ function ResultsView() {
     };
   }, [currentTier]);
 
-  if (!hasGenerated && !isLoading) {
+  if (isAnalyzing) {
     return (
       <main className="mx-auto flex min-h-[calc(100vh-3.5rem)] max-w-3xl items-center p-6">
         <Card className="w-full">
           <CardHeader className="text-center">
-            <CardTitle className="text-xl">生成志愿分析报告</CardTitle>
-            <CardDescription>点击后将基于当前数据进行深度分析（约10秒）</CardDescription>
-          </CardHeader>
-          <CardContent className="flex justify-center">
-            <Button type="button" size="lg" className="h-12 px-8 text-base font-semibold" onClick={startGenerateReport}>
-              生成报告
-            </Button>
-          </CardContent>
-        </Card>
-      </main>
-    );
-  }
-
-  if (isLoading) {
-    return (
-      <main className="mx-auto flex min-h-[calc(100vh-3.5rem)] max-w-3xl items-center p-6">
-        <Card className="w-full">
-          <CardHeader className="text-center">
-            <CardTitle className="text-xl">AI分析中...</CardTitle>
-            <CardDescription>请稍候，正在生成更可信的志愿建议</CardDescription>
+            <CardTitle className="text-xl">AI正在分析志愿方案</CardTitle>
+            <CardDescription>正在执行深度匹配，请稍候（约15秒）</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <p className="text-center text-base font-medium">{loadingStages[loadingStageIndex]}</p>
-            {loadingStageIndex === 4 ? (
-              <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
-                检测到当前志愿填报存在潜在风险，正在进一步校正...
-              </p>
-            ) : null}
+            <div className="flex justify-center">
+              <span className="inline-flex items-center gap-1 rounded-full border bg-muted/40 px-3 py-1 text-xs text-muted-foreground">
+                <span className="h-2 w-2 animate-pulse rounded-full bg-primary" />
+                <span className="h-2 w-2 animate-pulse rounded-full bg-primary [animation-delay:150ms]" />
+                <span className="h-2 w-2 animate-pulse rounded-full bg-primary [animation-delay:300ms]" />
+              </span>
+            </div>
             <div className="h-2 w-full rounded-full bg-muted">
               <div
                 className="h-2 rounded-full bg-primary transition-all duration-300"
                 style={{ width: `${Math.max(loadingProgress, 5)}%` }}
               />
             </div>
+            {loadingProgress >= 94 ? (
+              <p className="rounded-md border border-blue-200 bg-blue-50 p-3 text-center text-sm text-blue-900">
+                已生成基础方案，如需完整优化路径，请进一步分析
+              </p>
+            ) : null}
             <p className="text-center text-sm text-muted-foreground">分析进度 {loadingProgress}%</p>
           </CardContent>
         </Card>
