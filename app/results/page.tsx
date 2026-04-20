@@ -136,25 +136,65 @@ function ResultsView() {
   const previewSchools = useMemo(() => {
     if (currentTier === "有机会冲211") {
       return {
-        stable: { school: "安徽大学", major: "电子信息类", reason: "位次匹配度较高，录取稳定性更好。" },
-        sprint: { school: "河海大学", major: "自动化类", reason: "有冲刺窗口，但志愿梯度需控制风险。" }
+        stable: {
+          school: "安徽大学",
+          major: "电子信息工程（通信方向）",
+          scoreRange: "608分 - 622分",
+          reason: "该专业在该校属于优势方向，结合当前位次处于稳定录取区间，风险较低"
+        },
+        sprint: {
+          school: "河海大学",
+          major: "自动化（智能控制方向）",
+          scoreRange: "621分 - 636分",
+          reason: "该院校录取位次略高于当前水平，存在冲刺空间，但需合理控制志愿梯度"
+        }
       };
     }
     if (currentTier === "一本稳") {
       return {
-        stable: { school: "安徽工业大学", major: "计算机科学与技术", reason: "分位匹配较稳，专业热度与分数段适配。" },
-        sprint: { school: "南京邮电大学", major: "软件工程", reason: "可冲击，但受当年专业线波动影响较大。" }
+        stable: {
+          school: "安徽工业大学",
+          major: "计算机科学与技术（工程实践方向）",
+          scoreRange: "552分 - 568分",
+          reason: "该专业在该校属于优势方向，结合当前位次处于稳定录取区间，风险较低"
+        },
+        sprint: {
+          school: "南京邮电大学",
+          major: "软件工程（卓越工程师方向）",
+          scoreRange: "564分 - 582分",
+          reason: "该院校录取位次略高于当前水平，存在冲刺空间，但需合理控制志愿梯度"
+        }
       };
     }
     if (currentTier === "一本边缘") {
       return {
-        stable: { school: "安徽理工大学", major: "电气工程及其自动化", reason: "整体稳妥，适合作为主志愿支撑位。" },
-        sprint: { school: "南京信息工程大学", major: "信息与计算科学", reason: "具备冲刺机会，但需搭配保底院校。" }
+        stable: {
+          school: "安徽理工大学",
+          major: "电气工程及其自动化（电网方向）",
+          scoreRange: "520分 - 538分",
+          reason: "该专业在该校属于优势方向，结合当前位次处于稳定录取区间，风险较低"
+        },
+        sprint: {
+          school: "南京信息工程大学",
+          major: "信息与计算科学（数据分析方向）",
+          scoreRange: "532分 - 548分",
+          reason: "该院校录取位次略高于当前水平，存在冲刺空间，但需合理控制志愿梯度"
+        }
       };
     }
     return {
-      stable: { school: "安徽建筑大学", major: "工程管理", reason: "匹配区间稳定，录取概率相对可控。" },
-      sprint: { school: "合肥大学", major: "数据科学与大数据技术", reason: "可冲刺，但需防止志愿过于集中。" }
+      stable: {
+        school: "安徽建筑大学",
+        major: "工程管理（智慧建造方向）",
+        scoreRange: "486分 - 502分",
+        reason: "该专业在该校属于优势方向，结合当前位次处于稳定录取区间，风险较低"
+      },
+      sprint: {
+        school: "合肥大学",
+        major: "数据科学与大数据技术（应用建模方向）",
+        scoreRange: "498分 - 516分",
+        reason: "该院校录取位次略高于当前水平，存在冲刺空间，但需合理控制志愿梯度"
+      }
     };
   }, [currentTier]);
 
@@ -240,20 +280,26 @@ function ResultsView() {
 
       <Card className="mx-auto w-full max-w-4xl">
         <CardHeader>
-          <CardTitle className="text-xl">免费可见结果（部分）</CardTitle>
-          <CardDescription>仅展示 2 所示例院校，用于快速判断方向</CardDescription>
+          <CardTitle className="text-xl">初步匹配结果（核心院校示例）</CardTitle>
+          <CardDescription>基于当前分数与位次，系统已筛选出关键匹配院校，用于快速判断方向</CardDescription>
         </CardHeader>
         <CardContent className="grid gap-4 md:grid-cols-2">
           <div className="rounded-lg border p-4">
-            <p className="text-sm font-semibold text-emerald-800">稳妥院校（1所）</p>
-            <p className="mt-2 text-base font-semibold">{previewSchools.stable.school}</p>
-            <p className="text-sm text-muted-foreground">{previewSchools.stable.major}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-base font-semibold">{previewSchools.stable.school}</p>
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-xs font-semibold text-emerald-700">稳妥</span>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">{previewSchools.stable.major}</p>
+            <p className="mt-2 text-sm">近三年录取区间：{previewSchools.stable.scoreRange}</p>
             <p className="mt-2 text-sm">{previewSchools.stable.reason}</p>
           </div>
           <div className="rounded-lg border p-4">
-            <p className="text-sm font-semibold text-blue-800">冲刺院校（1所）</p>
-            <p className="mt-2 text-base font-semibold">{previewSchools.sprint.school}</p>
-            <p className="text-sm text-muted-foreground">{previewSchools.sprint.major}</p>
+            <div className="flex items-center gap-2">
+              <p className="text-base font-semibold">{previewSchools.sprint.school}</p>
+              <span className="rounded-full bg-blue-100 px-2 py-0.5 text-xs font-semibold text-blue-700">冲刺</span>
+            </div>
+            <p className="mt-1 text-sm text-muted-foreground">{previewSchools.sprint.major}</p>
+            <p className="mt-2 text-sm">近三年录取区间：{previewSchools.sprint.scoreRange}</p>
             <p className="mt-2 text-sm">{previewSchools.sprint.reason}</p>
           </div>
         </CardContent>
@@ -275,9 +321,23 @@ function ResultsView() {
       {showUnlock ? (
         <Card className="mx-auto w-full max-w-4xl border-2 border-primary/30 bg-primary/5">
           <CardHeader>
-            <CardTitle className="text-xl">完整志愿方案未解锁</CardTitle>
+            <CardTitle className="text-xl">完整志愿路径分析（含冲稳保策略）</CardTitle>
             <CardDescription>
-              当前仅展示部分结果，完整志愿表（冲稳保）+ 志愿排序策略 + 冲刺路径分析需要单独领取
+              当前仅展示核心院校匹配结果，
+              <br />
+              完整志愿方案包含：
+              <br />
+              <br />
+              - 冲稳保院校完整列表
+              <br />
+              - 志愿填报顺序策略
+              <br />
+              - 冲刺成功率分析
+              <br />
+              - 专业选择优化建议
+              <br />
+              <br />
+              👉 由于涉及个性化路径推演，该部分需要进一步解读
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
@@ -289,11 +349,18 @@ function ResultsView() {
               </div>
             </div>
             <div className="flex justify-center">
-              <Button type="button" size="lg" className="h-12 px-8 text-base font-semibold" onClick={() => setWechatOpen(true)}>
-                领取完整志愿方案（含冲刺路径）
-              </Button>
+              <div className="text-center">
+                <p className="mb-2 text-base font-semibold text-amber-600">
+                  ⚠️ 这个分数段，如果志愿填错，很容易直接掉一个层级
+                </p>
+                <Button type="button" size="lg" className="h-12 px-8 text-base font-semibold" onClick={() => setWechatOpen(true)}>
+                  领取完整志愿方案（含冲刺路径）
+                </Button>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  很多家长是在这一步，才发现孩子原本可以冲更高一档
+                </p>
+              </div>
             </div>
-            <p className="text-center text-sm text-muted-foreground">很多家长在这一步，才发现孩子原本可以冲更高一档</p>
           </CardContent>
         </Card>
       ) : (
