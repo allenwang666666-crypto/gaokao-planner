@@ -18,7 +18,7 @@ export function WechatLeadModal({ open, onClose, className }: WechatLeadModalPro
   const copyId = async () => {
     try {
       await navigator.clipboard.writeText(wechatId);
-      toast.success("已复制微信号");
+      toast.success("已复制，请打开微信添加");
     } catch {
       toast.error("复制失败，请手动添加");
     }
@@ -36,28 +36,23 @@ export function WechatLeadModal({ open, onClose, className }: WechatLeadModalPro
         >
           <X className="h-4 w-4" />
         </button>
-        <h2 className="pr-8 text-lg font-semibold">领取完整志愿方案</h2>
+        <h2 className="pr-8 text-lg font-semibold">领取完整志愿方案（冲稳保 + 提升路径）</h2>
         <p className="mt-1 text-sm leading-relaxed text-muted-foreground">
-          你当前看到的是基础结果。
+          已为你生成基础结果，
+          <br />
+          但完整方案包含：
           <br />
           <br />
-          完整方案将包含：
+          - 冲稳保完整院校名单
           <br />
-          ✔ 可冲院校名单（具体学校）
+          - 志愿填报顺序（避免滑档）
           <br />
-          ✔ 稳妥院校（录取概率分析）
+          - 是否可以冲更高一档的判断
           <br />
-          ✔ 保底院校（避免滑档）
-          <br />
-          ✔ 是否有机会冲更高档次（关键判断）
+          - 提分/调整建议（是否值得冲）
           <br />
           <br />
-          很多家长在这一步，
-          <br />
-          通过优化填报，最终提升了一个档次。
-          <br />
-          <br />
-          👇 添加老师微信领取完整方案
+          添加微信后发送完整分析报告
         </p>
         <div className="mt-4 flex flex-col items-center gap-3">
           <div className="w-full rounded-lg border bg-muted/30 px-3 py-2 text-center">
