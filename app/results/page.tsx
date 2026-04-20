@@ -1,7 +1,7 @@
 "use client";
 
 import { Suspense, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { WechatLeadModal } from "@/components/wechat-lead-modal";
@@ -85,6 +85,7 @@ function mergeProfileFromQuery(stored: UserProfile, searchParams: URLSearchParam
 }
 
 function ResultsView() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const [stored] = useState(() => loadProfile() ?? defaultProfile);
   const [wechatOpen, setWechatOpen] = useState(false);
@@ -178,6 +179,22 @@ function ResultsView() {
               根据当前分数与位次，孩子处于
               <span className="mx-1 font-bold">【{currentTier}】</span>，
               如果志愿填报合理，有机会冲到<span className="font-bold">【更高一档】</span>。
+            </p>
+          </div>
+          <div className="pt-2 text-center">
+            <p className="text-sm text-muted-foreground">当前仅为快速定位结果，无法覆盖志愿填报策略与冲刺路径</p>
+            <div className="mt-3 flex justify-center">
+              <Button
+                type="button"
+                size="lg"
+                className="h-12 px-8 text-base font-semibold"
+                onClick={() => router.push("/intake")}
+              >
+                👉 进一步分析孩子志愿填报（生成完整方案）
+              </Button>
+            </div>
+            <p className="mt-2 text-sm text-muted-foreground">
+              填写更详细信息，系统将生成冲稳保志愿方案（约2-3分钟）
             </p>
           </div>
         </CardContent>
