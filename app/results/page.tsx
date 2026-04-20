@@ -89,46 +89,55 @@ function ResultsView() {
   const searchParams = useSearchParams();
   const [stored] = useState(() => loadProfile() ?? defaultProfile);
   const [wechatOpen, setWechatOpen] = useState(false);
-  const [stageIndex, setStageIndex] = useState(0);
-  const [progress, setProgress] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
+  const [hasGenerated, setHasGenerated] = useState(false);
+  const [loadingStageIndex, setLoadingStageIndex] = useState(0);
+  const [loadingProgress, setLoadingProgress] = useState(0);
   const [showUnlock, setShowUnlock] = useState(false);
 
   const profile = useMemo(() => mergeProfileFromQuery(stored, searchParams), [stored, searchParams]);
   const currentTier = getCurrentTier(profile);
 
   const gradeLabel = gradeToLabel(searchParams.get("grade"));
-  const analysisStages = [
-    "正在分析近3年录取数据...",
-    "正在匹配位次与院校模型...",
-    "正在生成冲稳保策略...",
-    "正在评估提升一个档次的可能性..."
+  const loadingStages = [
+    "正在分析分数与位次匹配关系...",
+    "正在匹配近3年院校录取数据...",
+    "正在评估冲刺/稳妥/保底概率...",
+    "正在生成志愿填报路径建议...",
+    "即将生成你的专属志愿方案..."
   ] as const;
 
   useEffect(() => {
-    setStageIndex(0);
-    setProgress(0);
+    if (!hasGenerated) return;
     setShowUnlock(false);
+    const unlockTimer = setTimeout(() => setShowUnlock(true), 7000);
+    return () => clearTimeout(unlockTimer);
+  }, [hasGenerated]);
 
-    const stageTimers = [
-      setTimeout(() => setStageIndex(1), 1800),
-      setTimeout(() => setStageIndex(2), 3600),
-      setTimeout(() => setStageIndex(3), 5400),
-      setTimeout(() => {
-        setStageIndex(3);
-        setProgress(100);
-        setShowUnlock(true);
-      }, 7000)
-    ];
+  const startGenerateReport = () => {
+    setHasGenerated(false);
+    setShowUnlock(false);
+    setIsLoading(true);
+    setLoadingStageIndex(0);
+    setLoadingProgress(0);
 
-    const progressTimer = setInterval(() => {
-      setProgress((prev) => (prev >= 96 ? prev : prev + 3));
-    }, 220);
+    const phaseInterval = setInterval(() => {
+      setLoadingStageIndex((prev) => (prev >= 4 ? 4 : prev + 1));
+    }, 2000);
 
-    return () => {
-      stageTimers.forEach((timer) => clearTimeout(timer));
-      clearInterval(progressTimer);
-    };
-  }, []);
+    const progressInterval = setInterval(() => {
+      setLoadingProgress((prev) => (prev >= 98 ? prev : prev + 2));
+    }, 180);
+
+    setTimeout(() => {
+      clearInterval(phaseInterval);
+      clearInterval(progressInterval);
+      setLoadingStageIndex(4);
+      setLoadingProgress(100);
+      setIsLoading(false);
+      setHasGenerated(true);
+    }, 9000);
+  };
 
   const previewSchools = useMemo(() => {
     if (currentTier === "有机会冲211") {
@@ -154,6 +163,52 @@ function ResultsView() {
       sprint: { school: "合肥大学", major: "数据科学与大数据技术", reason: "可冲刺，但需防止志愿过于集中。" }
     };
   }, [currentTier]);
+
+  if (!hasGenerated && !isLoading) {
+    return (
+      <main className="mx-auto flex min-h-[calc(100vh-3.5rem)] max-w-3xl items-center p-6">
+        <Card className="w-full">
+          <CardHeader className="text-center">
+            <CardTitle className="text-xl">生成志愿分析报告</CardTitle>
+            <CardDescription>点击后将基于当前数据进行深度分析（约10秒）</CardDescription>
+          </CardHeader>
+          <CardContent className="flex justify-center">
+            <Button type="button" size="lg" className="h-12 px-8 text-base font-semibold" onClick={startGenerateReport}>
+              生成报告
+            </Button>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
+
+  if (isLoading) {
+    return (
+      <main className="mx-auto flex min-h-[calc(100vh-3.5rem)] max-w-3xl items-center p-6">
+        <Card className="w-full">
+          <CardHeader className="text-center">
+            <CardTitle className="text-xl">AI分析中...</CardTitle>
+            <CardDescription>请稍候，正在生成更可信的志愿建议</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-center text-base font-medium">{loadingStages[loadingStageIndex]}</p>
+            {loadingStageIndex === 4 ? (
+              <p className="rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                检测到当前志愿填报存在潜在风险，正在进一步校正...
+              </p>
+            ) : null}
+            <div className="h-2 w-full rounded-full bg-muted">
+              <div
+                className="h-2 rounded-full bg-primary transition-all duration-300"
+                style={{ width: `${Math.max(loadingProgress, 5)}%` }}
+              />
+            </div>
+            <p className="text-center text-sm text-muted-foreground">分析进度 {loadingProgress}%</p>
+          </CardContent>
+        </Card>
+      </main>
+    );
+  }
 
   return (
     <main className="mx-auto max-w-6xl space-y-6 p-6">
@@ -261,9 +316,9 @@ function ResultsView() {
       ) : (
         <Card className="mx-auto w-full max-w-4xl">
           <CardContent className="pt-6">
-            <p className="text-sm text-muted-foreground">{analysisStages[stageIndex]} · {progress}%</p>
+            <p className="text-sm text-muted-foreground">正在汇总完整志愿方案入口...</p>
             <div className="mt-3 h-2 w-full rounded-full bg-muted">
-              <div className="h-2 rounded-full bg-primary transition-all duration-300" style={{ width: `${Math.max(progress, 5)}%` }} />
+              <div className="h-2 rounded-full bg-primary transition-all duration-300" style={{ width: "75%" }} />
             </div>
           </CardContent>
         </Card>
